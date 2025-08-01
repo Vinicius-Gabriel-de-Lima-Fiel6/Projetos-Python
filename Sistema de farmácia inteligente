@@ -1,0 +1,708 @@
+import tkinter as tk
+from tkinter import ttk, messagebox
+from tkinter import simpledialog
+from tkinter import *
+import difflib
+from collections import Counter
+import matplotlib
+matplotlib.use('TkAgg')
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg 
+import matplotlib.pyplot as plt
+
+import numpy as np
+from scipy.interpolate import make_interp_spline  # já deve estar no topo
+#conhecimento
+import sqlite3
+conexao = sqlite3.connect("base_conhecimento.db")
+cursor = conexao.cursor()
+
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS conteudo_teorico (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        area TEXT,
+        pergunta TEXT UNIQUE,
+        resposta TEXT
+    )
+""")
+conexao.commit()
+
+
+#Base de conhecimento
+
+qa_data = {
+   
+    "paracetamol": {
+        "paracetamol": "Paracetamol é um analgésico e antipirético usado para aliviar dores leves a moderadas e reduzir a febre.",
+        "quais são as indicações do paracetamol?": "É indicado para alívio de dores de cabeça, dores musculares, dores nas costas, artrite e febre.",
+        "qual é o mecanismo de ação do paracetamol?": "Inibe a produção de prostaglandinas no sistema nervoso central, que são substâncias que causam dor e febre.",
+        "quais são os efeitos colaterais do paracetamol?": "Possíveis efeitos colaterais incluem reações alérgicas, erupções cutâneas, e toxicidade hepática em doses elevadas.",
+        "qual a dosagem recomendada de paracetamol?": "A dosagem usual é de 500 mg a 1g, 4 a 6 vezes ao dia, com máximo de 4g por dia.",
+        "quais são as contra-indicações do paracetamol?": "Contraindicado em pacientes com insuficiência hepática grave ou alergia ao paracetamol.",
+        "quais interações o paracetamol pode ter?": "O uso concomitante com álcool ou anticoagulantes pode aumentar o risco de danos hepáticos.",
+    },
+    
+    "ibuprofeno": {
+        " ibuprofeno": "Ibuprofeno é um anti-inflamatório não esteroidal (AINE) usado para aliviar dores e reduzir inflamações e febre.",
+        "quais são as indicações do ibuprofeno?": "É indicado para dores leves a moderadas, como dor de cabeça, dores articulares, dor menstrual e febre.",
+        "qual é o mecanismo de ação do ibuprofeno?": "Inibe as enzimas COX-1 e COX-2, responsáveis pela produção de prostaglandinas, substâncias que causam inflamação, dor e febre.",
+        "quais são os efeitos colaterais do ibuprofeno?": "Pode causar úlceras gástricas, sangramentos, dor abdominal, e aumento da pressão arterial.",
+        "qual a dosagem recomendada de ibuprofeno?": "A dosagem usual é de 200mg a 400mg, 3 a 4 vezes ao dia. Não exceder 1.2g por dia.",
+        "quais são as contra-indicações do ibuprofeno?": "Contraindicado em pacientes com úlceras gástricas, insuficiência renal grave ou história de problemas cardíacos.",
+        "quais interações o ibuprofeno pode ter?": "Interage com anticoagulantes, outros AINEs e diuréticos, podendo aumentar o risco de efeitos adversos.",
+    },
+
+    "amoxicilina": {
+        "amoxicilina": "Amoxicilina é um antibiótico da classe das penicilinas utilizado no tratamento de infecções bacterianas.",
+        "quais são as indicações da amoxicilina?": "É indicada para infecções respiratórias, urinárias, otites, entre outras infecções bacterianas.",
+        "qual é o mecanismo de ação da amoxicilina?": "Inibe a síntese da parede celular bacteriana, resultando na morte das bactérias.",
+        "quais são os efeitos colaterais da amoxicilina?": "Pode causar reações alérgicas, diarreia, náuseas, e alterações na flora intestinal.",
+        "qual a dosagem recomendada de amoxicilina?": "A dosagem usual é de 250mg a 500mg, 3 vezes ao dia, por 7 a 14 dias, dependendo da infecção.",
+        "quais são as contra-indicações da amoxicilina?": "Contraindicado em pacientes com hipersensibilidade à penicilina.",
+        "quais interações a amoxicilina pode ter?": "Pode interagir com anticoagulantes e reduzir a eficácia de anticoncepcionais orais.",
+    },
+
+    "metformina": {
+        "metformina": "Metformina é um medicamento antidiabético orafv                                        l utilizado no controle do diabetes tipo 2.",
+        "quais são as indicações da metformina?": "É indicada para o controle glicêmico no diabetes tipo 2, especialmente quando dieta e exercícios não são suficientes.",
+        "qual é o mecanismo de ação da metformina?": "Melhora a sensibilidade à insulina e diminui a produção de glicose pelo fígado.",
+        "quais são os efeitos colaterais da metformina?": "Efeitos colaterais podem incluir diarreia, náuseas, dor abdominal e, em casos raros, acidose láctica.",
+        "qual a dosagem recomendada de metformina?": "Iniciar com 500mg, 1 a 2 vezes ao dia, podendo aumentar gradualmente até 2g a 2,5g por dia.",
+        "quais são as contra-indicações da metformina?": "Contraindicado em pacientes com insuficiência renal grave, problemas hepáticos ou histórico de acidose láctica.",
+        "quais interações a metformina pode ter?": "Interage com diuréticos, corticosteroides e medicamentos que afetam a função renal.",
+    },
+
+    "salbutamol": {
+        "salbutamol": "Salbutamol é um broncodilatador utilizado no tratamento de doenças respiratórias como asma e DPOC.",
+        "quais são as indicações do salbutamol?": "É indicado para aliviar os sintomas de asma, bronquite crônica e outros distúrbios respiratórios obstrutivos.",
+        "qual é o mecanismo de ação do salbutamol?": "Atua como agonista dos receptores beta-2 adrenérgicos, relaxando os músculos das vias aéreas e facilitando a respiração.",
+        "quais são os efeitos colaterais do salbutamol?": "Pode causar tremores, taquicardia, dor de cabeça, e em raros casos, hipocalemia.",
+        "qual a dosagem recomendada de salbutamol?": "A dose usual é 100 a 200 mcg, conforme necessário, com até 12 doses por dia para adultos.",
+        "quais são as contra-indicações do salbutamol?": "Contraindicado em pacientes com histórico de hipersensibilidade ao salbutamol ou a outros broncodilatadores.",
+        "quais interações o salbutamol pode ter?": "Interage com outros medicamentos para asma, como corticosteroides, e com medicamentos que afetam o ritmo cardíaco.",
+    },
+
+    # Adicione mais medicamentos conforme necessário
+
+
+
+
+}
+# Elementos químicos base 
+elementos_info = {
+"H": {"Nome": "Hidrogênio", "Número": 1, "Massa": 1.008, "Grupo": "Não metais", "Período": "1", "Descrição": "Elemento mais leve e abundante."},
+"He": {"Nome": "Hélio", "Número": 2, "Massa": 4.0026, "Grupo": "Gases nobres", "Período": "1", "Descrição": "Gás nobre, usado em balões."},
+"Li": {"Nome": "Lítio", "Número": 3, "Massa": 6.94, "Grupo": "Metais alcalinos", "Período": "2", "Descrição": "Metal pouco reativo."},
+"Be": {"Nome": "Berílio", "Número": 4, "Massa": 9.0122, "Grupo": "Metais alcalino-terrosos", "Período": "2", "Descrição": "Carga para estabilidade é +2."},
+"B": {"Nome": "Boro", "Número": 5, "Massa": 10.81, "Grupo": "Semimetais", "Período": "2", "Descrição": "Precisa perder 3 elétrons para ficar estável."},
+"C": {"Nome": "Carbono", "Número": 6, "Massa": 12.011, "Grupo": "Não metais", "Período": "2", "Descrição": "Tetravalente e forma cadeias carbônicas."},
+"N": {"Nome": "Nitrogênio", "Número": 7, "Massa": 14.007, "Grupo": "Não metais", "Período": "2", "Descrição": "Elemento fundamental para a vida."},
+"O": {"Nome": "Oxigênio", "Número": 8, "Massa": 15.999, "Grupo": "Não metais", "Período": "2", "Descrição": "Essencial para a respiração."},
+"F": {"Nome": "Flúor", "Número": 9, "Massa": 18.998, "Grupo": "Halogênios", "Período": "2", "Descrição": "Mais eletronegativo da tabela."},
+"Ne": {"Nome": "Neônio", "Número": 10, "Massa": 20.180, "Grupo": "Gases nobres", "Período": "2", "Descrição": "Usado em neons e luzes."},
+"Na": {"Nome": "Sódio", "Número": 11, "Massa": 22.990, "Grupo": "Metais alcalinos", "Período": "3", "Descrição": "Muito eletropositivo e seus eletrólitos conduzem eletricidade."},
+"Mg": {"Nome": "Magnésio", "Número": 12, "Massa": 24.305, "Grupo": "Metais alcalino-terrosos", "Período": "3", "Descrição": "Pode formar o leite de magnésia."},
+"Al": {"Nome": "Alumínio", "Número": 13, "Massa": 26.982, "Grupo": "Outros metais", "Período": "3", "Descrição": "Metal forte e muito maleável."},
+"Si": {"Nome": "Silício", "Número": 14, "Massa": 28.085, "Grupo": "Semimetais", "Período": "3", "Descrição": "Usado em semicondutores."},
+"P": {"Nome": "Fósforo", "Número": 15, "Massa": 30.974, "Grupo": "Não metais", "Período": "3", "Descrição": "Fundamental à vida e precisa de 3 elétrons para a estabilidade."},
+"S": {"Nome": "Enxofre", "Número": 16, "Massa": 32.06, "Grupo": "Não metais", "Período": "3", "Descrição": "Fundamental à vida e precisa de 2 elétrons."},
+"Cl": {"Nome": "Cloro", "Número": 17, "Massa": 35.45, "Grupo": "Halogênios", "Período": "3", "Descrição": "Altamente eletronegativo e precisa de 1 elétron."},
+"Ar": {"Nome": "Argônio", "Número": 18, "Massa": 39.948, "Grupo": "Gases nobres", "Período": "3", "Descrição": "Gás nobre, usado em lâmpadas e fotografia."},
+"K": {"Nome": "Potássio", "Número": 19, "Massa": 39.098, "Grupo": "Metais alcalinos", "Período": "4", "Descrição": "Metal alcalino altamente reativo, essencial para funções celulares."},
+"Ca": {"Nome": "Cálcio", "Número": 20, "Massa": 40.078, "Grupo": "Metais alcalino-terrosos", "Período": "4", "Descrição": "Importante para ossos e dentes."},
+"Sc": {"Nome": "Escândio", "Número": 21, "Massa": 44.956, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Usado em ligas leves."},
+"Ti": {"Nome": "Titânio", "Número": 22, "Massa": 47.867, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Forte e resistente à corrosão."},
+"V": {"Nome": "Vanádio", "Número": 23, "Massa": 50.942, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Fortalece aço."},
+"Cr": {"Nome": "Cromo", "Número": 24, "Massa": 51.996, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Usado em cromagem e ligas."},
+"Mn": {"Nome": "Manganês", "Número": 25, "Massa": 54.938, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Importante para ligas de aço."},
+"Fe": {"Nome": "Ferro", "Número": 26, "Massa": 55.845, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Essencial na hemoglobina."},
+"Co": {"Nome": "Cobalto", "Número": 27, "Massa": 58.933, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Usado em ímãs e baterias."},
+"Ni": {"Nome": "Níquel", "Número": 28, "Massa": 58.693, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Usado em ligas e moedas."},
+"Cu": {"Nome": "Cobre", "Número": 29, "Massa": 63.546, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Excelente condutor elétrico."},
+"Zn": {"Nome": "Zinco", "Número": 30, "Massa": 65.38, "Grupo": "Metais de transição", "Período": "4", "Descrição": "Galvanização e essencial ao organismo."},
+"Ga": {"Nome": "Gálio", "Número": 31, "Massa": 69.723, "Grupo": "Outros metais", "Período": "4", "Descrição": "Derrete na mão, usado em eletrônicos."},
+"Ge": {"Nome": "Germânio", "Número": 32, "Massa": 72.63, "Grupo": "Semimetais", "Período": "4", "Descrição": "Usado em semicondutores."},
+"As": {"Nome": "Arsênio", "Número": 33, "Massa": 74.922, "Grupo": "Semimetais", "Período": "4", "Descrição": "Tóxico, usado em pesticidas."},
+"Se": {"Nome": "Selênio", "Número": 34, "Massa": 78.971, "Grupo": "Não metais", "Período": "4", "Descrição": "Essencial em pequenas quantidades."},
+"Br": {"Nome": "Bromo", "Número": 35, "Massa": 79.904, "Grupo": "Halogênios", "Período": "4", "Descrição": "Líquido, usado em retardadores de chama."},
+"Kr": {"Nome": "Criptônio", "Número": 36, "Massa": 83.798, "Grupo": "Gases nobres", "Período": "4", "Descrição": "Usado em lâmpadas e fotografia."},
+"Rb": {"Nome": "Rubídio", "Número": 37, "Massa": 85.468, "Grupo": "Metais alcalinos", "Período": "5", "Descrição": "Altamente reativo, usado em pesquisas."},
+"Sr": {"Nome": "Estrôncio", "Número": 38, "Massa": 87.62, "Grupo": "Metais alcalino-terrosos", "Período": "5", "Descrição": "Fogos de artifício e ligas metálicas."},
+"Y": {"Nome": "Ítrio", "Número": 39, "Massa": 88.906, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Usado em LEDs e supercondutores."},
+"Zr": {"Nome": "Zircônio", "Número": 40, "Massa": 91.224, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Resistente à corrosão, usado em reatores."},
+"Nb": {"Nome": "Nióbio", "Número": 41, "Massa": 92.906, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Usado para fortalecer aço e em supercondutores."},
+"Mo": {"Nome": "Molibdênio", "Número": 42, "Massa": 95.95, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Essencial em ligas e enzimas."},
+"Tc": {"Nome": "Tecnécio", "Número": 43, "Massa": 98, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Radioativo, usado em medicina nuclear."},
+"Ru": {"Nome": "Rutênio", "Número": 44, "Massa": 101.07, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Catalisador e ligas elétricas."},
+"Rh": {"Nome": "Ródio", "Número": 45, "Massa": 102.91, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Catalisadores automotivos."},
+"Pd": {"Nome": "Paládio", "Número": 46, "Massa": 106.42, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Joalheria e catalisadores."},
+"Ag": {"Nome": "Prata", "Número": 47, "Massa": 107.87, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Melhor condutor elétrico."},
+"Cd": {"Nome": "Cádmio", "Número": 48, "Massa": 112.41, "Grupo": "Metais de transição", "Período": "5", "Descrição": "Baterias e revestimentos."},
+"In": {"Nome": "Índio", "Número": 49, "Massa": 114.82, "Grupo": "Outros metais", "Período": "5", "Descrição": "Telas sensíveis ao toque."},
+"Sn": {"Nome": "Estanho", "Número": 50, "Massa": 118.71, "Grupo": "Outros metais", "Período": "5", "Descrição": "Bronze, soldas."},
+"Sb": {"Nome": "Antimônio", "Número": 51, "Massa": 121.76, "Grupo": "Semimetais", "Período": "5", "Descrição": "Retardadores de chama e ligas."},
+"Te": {"Nome": "Telúrio", "Número": 52, "Massa": 127.60, "Grupo": "Semimetais", "Período": "5", "Descrição": "Ligas metálicas e semicondutores."},
+"I": {"Nome": "Iodo", "Número": 53, "Massa": 126.90, "Grupo": "Halogênios", "Período": "5", "Descrição": "Função da tireoide, antissépticos."},
+"Xe": {"Nome": "Xenônio", "Número": 54, "Massa": 131.29, "Grupo": "Gases nobres", "Período": "5", "Descrição": "Lâmpadas e anestesia."},
+"Cs": {"Nome": "Césio", "Número": 55, "Massa": 132.91, "Grupo": "Metais alcalinos", "Período": "6", "Descrição": "Relógios atômicos."},
+"Ba": {"Nome": "Bário", "Número": 56, "Massa": 137.33, "Grupo": "Metais alcalino-terrosos", "Período": "6", "Descrição": "Radiologia, fogos de artifício."},
+"La": {"Nome": "Lantânio", "Número": 57, "Massa": 138.91, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Inicia os lantanídeos, lentes ópticas."},
+"Ce": {"Nome": "Cério", "Número": 58, "Massa": 140.12, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Catalisadores, polidores."},
+"Pr": {"Nome": "Praseodímio", "Número": 59, "Massa": 140.91, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ímãs e ligas aeronáuticas."},
+"Nd": {"Nome": "Neodímio", "Número": 60, "Massa": 144.24, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ímãs potentes."},
+"Pm": {"Nome": "Promécio", "Número": 61, "Massa": 145, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Radioativo, baterias nucleares."},
+"Sm": {"Nome": "Samário", "Número": 62, "Massa": 150.36, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ímãs e lasers."},
+"Eu": {"Nome": "Európio", "Número": 63, "Massa": 151.96, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Fósforos de telas e lâmpadas."},
+"Gd": {"Nome": "Gadolínio", "Número": 64, "Massa": 157.25, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ressonância magnética."},
+"Tb": {"Nome": "Térbio", "Número": 65, "Massa": 158.93, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Fósforos verdes e eletrônicos."},
+"Dy": {"Nome": "Disprósio", "Número": 66, "Massa": 162.50, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ímãs e lasers."},
+"Ho": {"Nome": "Hólmio", "Número": 67, "Massa": 164.93, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Ímãs e aplicações nucleares."},
+"Er": {"Nome": "Érbio", "Número": 68, "Massa": 167.26, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Fibras ópticas e lasers médicos."},
+"Tm": {"Nome": "Túlio", "Número": 69, "Massa": 168.93, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Lasers portáteis."},
+"Yb": {"Nome": "Itérbio", "Número": 70, "Massa": 173.05, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Relógios atômicos e materiais especiais."},
+"Lu": {"Nome": "Lutécio", "Número": 71, "Massa": 174.97, "Grupo": "Lantanídeos", "Período": "6", "Descrição": "Tomografia e catálise."},
+"Hf": {"Nome": "Háfnio", "Número": 72, "Massa": 178.49, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Ligas de alta temperatura."},
+"Ta": {"Nome": "Tântalo", "Número": 73, "Massa": 180.95, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Eletrônicos e implantes."},
+"W": {"Nome": "Tungstênio", "Número": 74, "Massa": 183.84, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Mais alto ponto de fusão."},
+"Re": {"Nome": "Rênio", "Número": 75, "Massa": 186.21, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Ligas e catalisadores."},
+"Os": {"Nome": "Ósmio", "Número": 76, "Massa": 190.23, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Metal mais denso."},
+"Ir": {"Nome": "Irídio", "Número": 77, "Massa": 192.22, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Equipamentos médicos, resistente à corrosão."},
+"Pt": {"Nome": "Platina", "Número": 78, "Massa": 195.08, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Joias e catalisadores."},
+"Au": {"Nome": "Ouro", "Número": 79, "Massa": 196.97, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Metal precioso e maleável."},
+"Hg": {"Nome": "Mercúrio", "Número": 80, "Massa": 200.59, "Grupo": "Metais de transição", "Período": "6", "Descrição": "Único metal líquido à temperatura ambiente."},
+"Tl": {"Nome": "Tálio", "Número": 81, "Massa": 204.38, "Grupo": "Outros metais", "Período": "6", "Descrição": "Tóxico, usado em eletrônicos."},
+"Pb": {"Nome": "Chumbo", "Número": 82, "Massa": 207.2, "Grupo": "Outros metais", "Período": "6", "Descrição": "Denso, usado em proteção contra radiação."},
+"Bi": {"Nome": "Bismuto", "Número": 83, "Massa": 208.98, "Grupo": "Outros metais", "Período": "6", "Descrição": "Menos tóxico que o chumbo."},
+"Po": {"Nome": "Polônio", "Número": 84, "Massa": 209, "Grupo": "Semimetais", "Período": "6", "Descrição": "Radioativo, fontes de calor."},
+"At": {"Nome": "Astato", "Número": 85, "Massa": 210, "Grupo": "Halogênios", "Período": "6", "Descrição": "Raro e radioativo."},
+"Rn": {"Nome": "Radônio", "Número": 86, "Massa": 222, "Grupo": "Gases nobres", "Período": "6", "Descrição": "Radioativo, perigoso em ambientes fechados."},
+"Fr": {"Nome": "Frâncio", "Número": 87, "Massa": 223, "Grupo": "Metais alcalinos", "Período": "7", "Descrição": "Extremamente raro e radioativo."},
+"Ra": {"Nome": "Rádio", "Número": 88, "Massa": 226, "Grupo": "Metais alcalino-terrosos", "Período": "7", "Descrição": "Radioativo, usado em luminância antiga."},
+"Ac": {"Nome": "Actínio", "Número": 89, "Massa": 227, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Inicia os actinídeos, altamente radioativo."},
+"Th": {"Nome": "Tório", "Número": 90, "Massa": 232.04, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Potencial combustível nuclear."},
+"Pa": {"Nome": "Protactínio", "Número": 91, "Massa": 231.04, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Radioativo, usado em pesquisas nucleares."},
+"Np": {"Nome": "Neptúnio", "Número": 93, "Massa": 237, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Produzido em reatores nucleares, radioativo."},
+"Pu": {"Nome": "Plutônio", "Número": 94, "Massa": 244, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Usado em armas nucleares e reatores."},
+"Am": {"Nome": "Amerício", "Número": 95, "Massa": 243, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Detectores de fumaça."},
+"Cm": {"Nome": "Cúrio", "Número": 96, "Massa": 247, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Fonte de energia espacial."},
+"Bk": {"Nome": "Berquélio", "Número": 97, "Massa": 247, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Usado em pesquisa nuclear."},
+"Cf": {"Nome": "Califórnio", "Número": 98, "Massa": 251, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Fonte de nêutrons."},
+"Es": {"Nome": "Einstênio", "Número": 99, "Massa": 252, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Produzido em explosões nucleares."},
+"Fm": {"Nome": "Férmio", "Número": 100, "Massa": 257, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Usado em estudos científicos."},
+"Md": {"Nome": "Mendelévio", "Número": 101, "Massa": 258, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Pesquisa química nuclear."},
+"No": {"Nome": "Nobélio", "Número": 102, "Massa": 259, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Experimentos laboratoriais."},
+"Lr": {"Nome": "Laurêncio", "Número": 103, "Massa": 266, "Grupo": "Actinídeos", "Período": "7", "Descrição": "Elemento sintético radioativo."},
+"Rf": {"Nome": "Rutherfórdio", "Número": 104, "Massa": 267, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Elemento sintético para pesquisa."},
+"Db": {"Nome": "Dúbnio", "Número": 105, "Massa": 268, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Radioativo, instável."},
+"Sg": {"Nome": "Seabórgio", "Número": 106, "Massa": 271, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Usado apenas em pesquisa."},
+"Bh": {"Nome": "Bóhrio", "Número": 107, "Massa": 270, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Instável e sintético."},
+"Hs": {"Nome": "Hássio", "Número": 108, "Massa": 277, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Pesquisado em laboratórios nucleares."},
+"Mt": {"Nome": "Meitnério", "Número": 109, "Massa": 278, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Superpesado e sintético."},
+"Ds": {"Nome": "Darmstádio", "Número": 110, "Massa": 281, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Meia-vida muito curta."},
+"Rg": {"Nome": "Roentgênio", "Número": 111, "Massa": 282, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Elemento radioativo sintético."},
+"Cn": {"Nome": "Copernício", "Número": 112, "Massa": 285, "Grupo": "Metais de transição", "Período": "7", "Descrição": "Altamente instável."},
+"Nh": {"Nome": "Nihônio", "Número": 113, "Massa": 286, "Grupo": "Outros metais", "Período": "7", "Descrição": "Elemento sintético."},
+"Fl": {"Nome": "Fleróvio", "Número": 114, "Massa": 289, "Grupo": "Outros metais", "Período": "7", "Descrição": "Superpesado, sintético."},
+"Mc": {"Nome": "Moscóvio", "Número": 115, "Massa": 290, "Grupo": "Outros metais", "Período": "7", "Descrição": "Meia-vida curta."},
+"Lv": {"Nome": "Livermório", "Número": 116, "Massa": 293, "Grupo": "Outros metais", "Período": "7", "Descrição": "Elemento instável."},
+"Ts": {"Nome": "Tenessino", "Número": 117, "Massa": 294, "Grupo": "Halogênios", "Período": "7", "Descrição": "Superpesado e sintético."},
+"Og": {"Nome": "Oganessônio", "Número": 118, "Massa": 294, "Grupo": "Gases nobres", "Período": "7", "Descrição": "Altamente radioativo e sintético."},
+"Uue": {"Nome": "Ununennium", "Número": 119, "Massa": 315, "Grupo": "Metais alcalinos", "Período": "8", "Descrição": "Previsto como metal alcalino superpesado."},
+"Ubn": {"Nome": "Unbinilium", "Número": 120, "Massa": 320, "Grupo": "Metais alcalino-terrosos", "Período": "8", "Descrição": "Previsto como metal alcalino-terroso."},
+"Ubu": {"Nome": "Unbiunium", "Número": 121, "Massa": 326, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Primeiro dos superactinídeos."},
+"Ubb": {"Nome": "Unbibium", "Número": 122, "Massa": 328, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Hipotético do grupo 4."},
+"Ubt": {"Nome": "Unbitrium", "Número": 123, "Massa": 330, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Propriedades desconhecidas."},
+"Ubq": {"Nome": "Unbiquadium", "Número": 124, "Massa": 332, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Ainda não sintetizado."},
+"Ubp": {"Nome": "Unbipentium", "Número": 125, "Massa": 334, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Potencial de propriedades únicas."},
+"Ubh": {"Nome": "Unbihexium", "Número": 126, "Massa": 336, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Previsto como altamente estável."},
+"Ubs": {"Nome": "Unbiseptium", "Número": 127, "Massa": 338, "Grupo": "Elementos superpesados", "Período": "8", "Descrição": "Totalmente teórico, sem dados experimentais."},
+ "U":{"Nome":"Urânio","Número":92,"Massa":238.0289,"Grupo":"Actinídeos","Período":"7","Descrição":"Combustível nuclear, ogivas,blindagem,corantes de virdro e cerâmica."}
+    
+}
+tabela = [
+        ["H", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "He"],
+        ["Li", "Be","","","","","","","","","","","B","C","N","O","F","Ne"],
+        ["Na", "Mg","","","","","","","","","","","Al","Si","P","S","Cl","Ar" ],
+        ["K", "Ca", "Sc","Ti","V","Cr","Mn","Fe","Co","Ni","Cu","Zn","Ga","Ge","As","Se","Br","Kr"],
+        ["Rb", "Sr", "Y","Zr","Nb","Mo","Tc","Ru","Rh","Pd","Ag","Cd","In","Sn","Sb","Te","I","Xe"],
+        ["Cs", "Ba","","Hf","Ta","W","Re","Os","Ir","Pt","Au","Hg","Tl","Pb","Bi","Po","At","Rn"],
+        ["Fr", "Ra","","Rf","Db","Sg","Bh","Hs","Mt","Ds","Rg","Cn","Nh","Fl","Mc","Lv","Ts","Og"],
+        ["Uue","Ubn",""],
+        ["","","La","Ce","Pr","Nd","Pm","Sm","Eu","Gd","Tb","Dy","Ho","Er","Tm","Yb","Lu"],
+        ["","","Ac","Th","Pa","U","Np","Pu","Am","Cm","Bk","Cf","Es","Fm","Md","No","Lr"],
+        ["","","Ubu","Ubb","Ubt","Ubq","Ubp","Ubh","Ubs"]
+    ]
+cores_grupo={
+        "Gases nobres": "#8E24AA",
+        "Halogênios": "#43A047",
+        "Metais alcalinos": "#F4511E",
+        "Metais alcalinos-terrosos": "#FFB300",
+        "Semimetais": "#1E88E5",
+        "Não metais": "blue",
+        "Metais de transição": "#039BE5",
+        "Actinídeos": "#6D4C41",
+        "Lantanídeos": "#5E35B1",
+        "Outros metais": "#90CAF9",
+        "Elementos superpesados":"black",
+        "":"gray"
+}
+#SISTEMA
+#Chatbot
+def responder_chatbot():
+    pergunta = entrada_chat.get().strip().lower()
+    if not pergunta:
+        return
+
+    texto_chat.config(state='normal')
+    texto_chat.insert(tk.END, f"Você: {pergunta}\n")
+
+    resposta = None
+
+    # 1. Tenta buscar no banco de dados externo
+    try:
+        cursor.execute("SELECT resposta FROM conteudo_teorico WHERE pergunta = ?", (pergunta,))
+        resultado = cursor.fetchone()
+        if resultado:
+            resposta = resultado[0]
+    except Exception as e:
+        texto_chat.insert(tk.END, f"Bot: Erro ao acessar o banco: {e}\n")
+        texto_chat.config(state='disabled')
+        return
+
+    # 2. Se não encontrar no banco, procura no dicionário qa_data
+    if not resposta:
+        parecida = difflib.get_close_matches(pergunta, qa_data.keys(), n=1, cutoff=0.6)
+        if parecida:
+            chave = parecida[0]
+            resposta = qa_data[chave]
+            if isinstance(resposta,dict):
+                linhas=[]
+                for i,(k,v) in enumerate(resposta.items(),1):
+                    linhas.append(f"{i}.{k.capitalize()}\n {v}")
+                    resposta="\n\n".join(linhas)
+                    
+
+            # 3. Salva a pergunta no banco para futuras buscas
+            try:
+                cursor.execute("INSERT INTO conteudo_teorico (area, pergunta, resposta) VALUES (?, ?, ?)",
+                               ("chatbot", pergunta, resposta))
+                conexao.commit()
+            except:
+                pass
+        else:
+            resposta = "Não entendi. Pode perguntar de outro jeito?"
+
+    # 4. Exibe a resposta no chat
+    texto_chat.insert(tk.END, f"Bot: {resposta}\n")
+    texto_chat.config(state='disabled')
+    entrada_chat.delete(0, tk.END)
+
+
+# TABELA PERIÓDICA
+#mostrar informações
+def mostrar_info(simbolo):
+    info = elementos_info.get(simbolo, None)
+    if info:
+        texto = f"""Nome: {info['Nome']}
+Número atômico: {info['Número']}
+Massa atômica: {info['Massa']}
+Grupo: {info['Grupo']}
+Período: {info['Período']}
+Descrição: {info['Descrição']}"""
+    else:
+        texto = f"{simbolo}: Dados não disponíveis."
+    messagebox.showinfo(f"Elemento {simbolo}", texto)
+
+# Função para criar a tabela periódica organizada
+def criar_tabela_periodica(container, elementos_info):
+    # Tabela organizada conforme o layout tradicional da tabela periódica
+    # Criando os botões para cada elemento
+    frame = tk.Frame(container, bg="#fafafa")
+    frame.pack(pady=10)
+    for i, linha in enumerate(tabela):
+        for j, el in enumerate(linha):
+            if el:  # Se o símbolo não for uma string vazia
+                grupo = elementos_info.get(el, {}).get("Grupo", "")
+                cor = cores_grupo.get(grupo, "#90CAF9")  
+                btn = tk.Button(frame, text=el, width=4, height=2, bg=cor, fg="white",font=("Arial", 10, "bold"),command=lambda e=el: mostrar_info(e))
+                btn.grid(row=i, column=j, padx=1, pady=1)
+
+# Função para criar a Tabela de Solubilidade
+def criar_tabela_solubilidade(container):
+    dados_solubilidade = [
+    ("Brometo de chumbo(II)", "PbBr₂", "7,9 x 10⁻⁵"),
+    ("Brometo de cobre(I)", "CuBr", "4,2 x 10⁻⁸"),
+    ("Brometo de prata", "AgBr", "7,7 x 10⁻¹³"),
+    ("Cloreto de prata", "AgCl", "1,6 x 10⁻¹⁰"),
+    ("Hidróxido de alumínio", "Al(OH)₃", "1,1 x 10⁻³³"),
+    ("Hidróxido de ferro(III)", "Fe(OH)₃", "4 x 10⁻³⁸"),
+    ("Hidróxido de magnésio", "Mg(OH)₂", "1,8 x 10⁻¹¹"),
+    ("Carbonato de cálcio", "CaCO₃", "3,36 x 10⁻⁹"),
+    ("Sulfato de bário", "BaSO₄", "1,1 x 10⁻¹⁰")
+    ]
+
+    frame = tk.Frame(container, bg="#fafafa")
+    frame.pack(pady=100,padx=200)
+
+    # Cabeçalho da tabela
+    tk.Label(frame, text="Composto", width=30, font=("Arial", 12), bg="#fafafa").grid(row=0, column=0)
+    tk.Label(frame, text="Fórmula", width=20, font=("Arial", 12), bg="#fafafa").grid(row=0, column=1)
+    tk.Label(frame, text="Solubulidade/água", width=15, font=("Arial", 12), bg="#fafafa").grid(row=0, column=2)
+
+    # Preencher as linhas com os dados
+    for i, (nome, formula, kps) in enumerate(dados_solubilidade):
+        tk.Label(frame, text=nome, width=30, font=("Arial", 12), bg="#fafafa").grid(row=i+1, column=0)
+        tk.Label(frame, text=formula, width=20, font=("Arial", 12), bg="#fafafa").grid(row=i+1, column=1)
+        tk.Label(frame, text=kps, width=15, font=("Arial", 12), bg="#fafafa").grid(row=i+1, column=2)
+
+# Função de alternância entre as tabelas
+def alternar_tabela(*args):
+    for widget in aba_tabela.winfo_children():
+        widget.destroy()
+
+    if var_tabela.get() == "Tabela Periódica":
+        menu_tabela = tk.OptionMenu(aba_tabela, var_tabela, "Tabela Periódica", "Tabela de Solubilidade","")
+        menu_tabela.pack(pady=10,padx=10)
+        criar_tabela_periodica(aba_tabela, elementos_info)  # Tabela Periódica
+       
+       
+    elif var_tabela.get() == "Tabela de Solubilidade":
+        menu_tabela = tk.OptionMenu(aba_tabela, var_tabela, "Tabela Periódica", "Tabela de Solubilidade")
+        menu_tabela.pack(pady=10,padx=10)   
+        
+        criar_tabela_solubilidade(aba_tabela)  # Tabela de Solubilidade
+            
+
+
+# Interface
+root = tk.Tk()
+root.title("Ciência da Farmácia")
+root.geometry("750x620")
+
+
+
+
+#botoes da innterface principal
+abas = ttk.Notebook(root)
+aba_chatbot = ttk.Frame(abas)
+aba_calc = ttk.Frame(abas)
+aba_tabela = ttk.Frame(abas)
+aba_balanco=ttk.Frame(abas)
+aba_grafico=ttk.Frame(abas)
+aba_conhecimento = ttk.Frame(abas)
+
+abas.add(aba_chatbot, text="Chatbot")
+abas.add(aba_conhecimento, text="Base de Conhecimento")
+abas.add(aba_calc, text="Calculadora")
+abas.add(aba_tabela, text="Tabelas")
+abas.add(aba_balanco, text='Balanço de reações')
+abas.add(aba_grafico,text="Gráfico de solubilidade")#adição de botões na interface tk.root
+abas.pack(expand=1, fill="both")
+
+# Menu suspenso para escolher entre a Tabela Periódica e a Tabela de Solubilidade
+var_tabela = tk.StringVar(value="Tabelas")  # Inicializa com a Tabela Periódica
+menu_tabela = tk.OptionMenu(aba_tabela, var_tabela, "Tabela Periódica", "Tabela de Solubilidade")
+menu_tabela.pack(pady=10,padx=10)
+
+# Conectar o menu suspenso ao método de alternância
+var_tabela.trace_add("write", alternar_tabela)
+
+# Criar tabela periódica
+criar_tabela_periodica(aba_tabela, elementos_info)
+# Aba do chatbot
+texto_chat = tk.Text(aba_chatbot, height=20, width=200, state='disabled', bg="#ffffff", fg="#0d47a1", font=("Arial", 12))
+texto_chat.pack(padx=10, pady=10)
+
+entrada_frame = tk.Frame(aba_chatbot, bg="#fafafa")
+entrada_frame.pack(pady=5)
+entrada_chat = tk.Entry(entrada_frame, width=50, font=("Arial", 12), bg="#ffffff", fg="#0d47a1")
+entrada_chat.pack(side=tk.LEFT, padx=(0, 5))
+tk.Button(entrada_frame, text="Enviar", command=responder_chatbot, bg="#90caf9", fg="#0d47a1", font=("Arial", 12)).pack(side=tk.LEFT)
+
+# Aba calculadora
+#fórmulas químicas
+def calc_molarity(moles, volume_l): return moles / volume_l
+def calc_molality(moles, mass_solvent_kg): return moles / mass_solvent_kg
+def calc_ppm(solute_g, solution_g): return (solute_g / solution_g) * 1e6
+def calc_ppb(solute_g, solution_g): return (solute_g / solution_g) * 1e9
+def calc_percent_mass(solute_g, solution_g): return (solute_g / solution_g) * 100
+def calc_enthalpy(mass, specific_heat, delta_t): return mass * specific_heat * delta_t
+def calc_solubility(solute_g, solvent_l): return solute_g / solvent_l
+
+tk.Label(aba_calc, text="Calculadora Química", font=("Arial", 16), bg="#fafafa", fg="#0d47a1").pack(pady=10)
+opcoes = ["Molaridade", "Molalidade", "PPM", "PPB", "% em massa", "Entalpia", "Solubilidade"]
+var_opcao = tk.StringVar(value=opcoes[0])
+tk.OptionMenu(aba_calc, var_opcao, *opcoes).pack(pady=5)
+
+frame_params = tk.Frame(aba_calc, bg="#fafafa")
+frame_params.pack(pady=5)
+entries = []
+#parâmetros
+def atualizar_parametros(*args):
+    for w in frame_params.winfo_children():
+        w.destroy()
+    entries.clear()
+    escolha = var_opcao.get()
+    params = {
+        "Molaridade": ["Moles (mol)", "Volume (L)"],
+        "Molalidade": ["Moles (mol)", "Massa solvente (kg)"],
+        "PPM": ["Soluto (g)", "Solução (g)"],
+        "PPB": ["Soluto (g)", "Solução (g)"],
+        "% em massa": ["Soluto (g)", "Solução (g)"],
+        "Entalpia": ["Massa (g)", "Cap. térmica (J/g°C)", "ΔT (°C)"],
+        "Solubilidade": ["Soluto (g)", "Solvente (L)"]
+    }.get(escolha, [])
+    for i, p in enumerate(params):
+        tk.Label(frame_params, text=p, bg="#fafafa", font=("Arial", 12)).grid(row=i, column=0, sticky="e")
+        e = tk.Entry(frame_params, font=("Arial", 12), bg="#ffffff", fg="#0d47a1")
+        e.grid(row=i, column=1, padx=5, pady=2)
+        entries.append(e)
+#cálculo
+def calcular():
+    try:
+        valores = [float(e.get()) for e in entries]
+        escolha = var_opcao.get()
+        funcoes = {
+            "Molaridade": calc_molarity,
+            "Molalidade": calc_molality,
+            "PPM": calc_ppm,
+            "PPB": calc_ppb,
+            "% em massa": calc_percent_mass,
+            "Entalpia": calc_enthalpy,
+            "Solubilidade": calc_solubility
+        }
+        resultado_calc = funcoes[escolha](*valores)
+        resultado.config(text=f"Resultado: {resultado_calc:.4g}")
+    except Exception as e:
+        messagebox.showerror("Erro", str(e))
+
+var_opcao.trace_add("write", atualizar_parametros)
+atualizar_parametros()
+tk.Button(aba_calc, text="Calcular", command=calcular, bg="#90caf9", fg="#0d47a1", font=("Arial", 12)).pack(pady=10)
+resultado = tk.Label(aba_calc, text="Resultado:", font=("Arial", 14), bg="#fafafa", fg="#0d47a1")
+resultado.pack(pady=10)
+
+
+##GRÁFICOS DE SOLUBILIDADE!!!!!!
+from matplotlib.backends.backend_tkagg import NavigationToolbar2Tk
+#dados gobais
+compostos_adicionados=[]
+
+frame_solubilidade = tk.Frame(aba_grafico, bg="#fafafa")
+frame_solubilidade.pack(pady=15)
+
+tk.Label(frame_solubilidade, text="Gráfico de Solubilidade", font=("Arial", 13, "bold"),
+         bg="#fafafa", fg="#0d47a1").pack()
+
+# Entradas do usuário
+frame_inputs = tk.Frame(frame_solubilidade, bg="#fafafa")
+frame_inputs.pack()
+
+tk.Label(frame_inputs, text="Composto:", bg="#fafafa").grid(row=0, column=0, sticky="e", padx=2, pady=2)
+entrada_nome = tk.Entry(frame_inputs, width=25)
+entrada_nome.grid(row=0, column=1, padx=2, pady=2)
+
+tk.Label(frame_inputs, text="Temperaturas (°K):", bg="#fafafa").grid(row=1, column=0, sticky="e", padx=2, pady=2)
+entrada_temp = tk.Entry(frame_inputs, width=40)
+entrada_temp.grid(row=1, column=1, padx=2, pady=2)
+
+tk.Label(frame_inputs, text="Solubilidades (g/100g H₂O):", bg="#fafafa").grid(row=2, column=0, sticky="e", padx=2, pady=2)
+entrada_solu = tk.Entry(frame_inputs, width=40)
+entrada_solu.grid(row=2, column=1, padx=2, pady=2)
+
+# Função de plotagem
+def plotar_grafico_solubilidade():
+    try:
+        nome = entrada_nome.get().strip()
+        temperaturas = list(map(float, entrada_temp.get().strip().split(',')))
+        solubilidades = list(map(float, entrada_solu.get().strip().split(',')))
+
+        if not nome:
+            messagebox.showerror("Erro", "Informe o nome do composto.")
+            return
+        if len(temperaturas) != len(solubilidades) or len(temperaturas) < 2:
+            messagebox.showerror("Erro", "Insira pelo menos 2 pares e listas com mesmo tamanho.")
+            return
+
+        x = np.array(temperaturas)
+        y = np.array(solubilidades)
+
+        if len(x) >= 3:
+            x_smooth = np.linspace(x.min(), x.max(), 300)
+            spline = make_interp_spline(x, y, k=2)
+            y_smooth = spline(x_smooth)
+            ax_sol.plot(x_smooth, y_smooth, label=nome)
+        else:
+            ax_sol.plot(x, y, linestyle='-', marker='o', label=nome)
+
+        compostos_adicionados.append(nome)
+        ax_sol.set_title("Curvas de Solubilidade\n" + " / ".join(compostos_adicionados))
+        ax_sol.set_xlabel("Temperatura (°K)")
+        ax_sol.set_ylabel("Solubilidade (g/100g H₂O)")
+        ax_sol.grid(True)
+        ax_sol.legend()
+
+        canvas_sol.draw()
+
+        # Limpar campos
+        entrada_nome.delete(0, tk.END)
+        entrada_temp.delete(0, tk.END)
+        entrada_solu.delete(0, tk.END)
+
+    except Exception as e:
+        messagebox.showerror("Erro ao plotar", str(e))
+
+# Botão de adicionar curva
+tk.Button(frame_solubilidade, text="Adicionar Curva",
+          command=plotar_grafico_solubilidade,
+          bg="#90caf9", fg="#0d47a1", font=("Arial", 11)).pack(pady=5)
+
+# Gráfico Matplotlib embutido
+fig_sol, ax_sol = plt.subplots(figsize=(7, 4))
+ax_sol.set_title("Curvas de Solubilidade")
+ax_sol.set_xlabel("Temperatura (°K)")
+ax_sol.set_ylabel("Solubilidade (g/100g H₂O)")
+ax_sol.grid(True)
+
+canvas_sol = FigureCanvasTkAgg(fig_sol, master=frame_solubilidade)
+canvas_sol.draw()
+canvas_sol.get_tk_widget().pack(pady=10)
+
+# Toolbar interativa (zoom, pan, salvar, reset)
+toolbar = NavigationToolbar2Tk(canvas_sol, frame_solubilidade)
+toolbar.update()
+toolbar.pack()
+
+#balanço de reações
+from chempy import balance_stoichiometry
+
+def balancear_equacao_chem(equacao_str):
+    try:
+        reagentes_str, produtos_str = equacao_str.split("->")
+        reagentes = [x.strip() for x in reagentes_str.split("+")]
+        produtos = [x.strip() for x in produtos_str.split("+")]
+        
+        reac, prod = balance_stoichiometry(set(reagentes), set(produtos))
+
+        reac_str = " + ".join(f"{coef} {comp}" for comp, coef in reac.items())
+        prod_str = " + ".join(f"{coef} {comp}" for comp, coef in prod.items())
+        
+        return f"{reac_str} -> {prod_str}"
+    except Exception as e:
+        return f"Erro: {str(e)}"
+
+# Campos globais
+entrada_eq = None
+resultado_balanco = None
+
+def balancear_equacao_basica():
+    entrada = entrada_eq.get().strip()
+    resultado = balancear_equacao_chem(entrada)
+    resultado_balanco.config(text="Equação Balanceada:\n" + resultado)
+    print(resultado)#mOSTRA O RESULTADP NO SISTEMA DE BALANCEAMENTO]
+
+
+# Interface da aba "Balanço de Reações"
+tk.Label(aba_balanco, text="Balanço de Equações Químicas", font=("Arial", 16), bg="#fafafa", fg="#0d47a1").pack(pady=10)
+tk.Label(aba_balanco, text="Digite a equação (Ex: H2 + O2 -> H2O)", font=("Arial", 12), bg="#fafafa").pack()
+
+entrada_eq = tk.Entry(aba_balanco, width=50, font=("Arial", 12), bg="#ffffff", fg="#0d47a1")
+entrada_eq.pack(pady=5)
+
+tk.Button(aba_balanco, text="Balancear Equação", command=balancear_equacao_basica,
+          bg="#2196F3", fg="white", font=("Arial", 12)).pack(pady=5)
+
+resultado_balanco = tk.Label(aba_balanco, text="", font=("Arial", 12), bg="#fafafa", fg="#0d47a1")
+resultado_balanco.pack(pady=10)
+
+#Aba para pesquisar molécula, BAANCO EXTERNO!!!!!
+import webbrowser
+
+def abrir_visualizador_web():
+    nome = entrada_molecula.get().strip()
+    if not nome:
+        messagebox.showerror("Erro", "Digite o nome da molécula.")
+        return
+   
+    url = f"https://pubchem.ncbi.nlm.nih.gov/#query={nome}"
+    webbrowser.open(url)#Caminho do visualozador 3d
+    
+tk.Label(aba_balanco, text="Digite o nome da molécula:", bg="#fafafa", font=("Arial", 12)).pack(pady=10)
+entrada_molecula = tk.Entry(aba_balanco, width=30, font=("Arial", 12))
+entrada_molecula.pack()
+
+tk.Button(aba_balanco, text="Visualizar em 3D", command=abrir_visualizador_web, bg="#000000", fg="#ffffff", font=("Arial", 12)).pack(pady=15)
+#LABORATÓRIO PHET
+def phet():
+    webbrowser.open("https://phet.colorado.edu/pt_BR/simulations/category/chemistry")
+tk.Button(aba_balanco, text="Laboratório Virtual PHET", command=phet, bg="#a5d6a7", fg="#000000", font=("Arial", 12)).pack(pady=15)
+    
+
+#base de cohecimento conexão
+def salvar_conhecimento():
+    area = entrada_area.get().strip()#para entrar na area de conhecimento
+    pergunta = entrada_pergunta.get().strip().lower()#recebe a possível pergunta
+    resposta = entrada_resposta.get("1.0", tk.END).strip()#recebe resposta
+
+    if not (area and pergunta and resposta):
+        messagebox.showerror("Erro", "Preencha todos os campos.")
+        return
+
+    try:
+        cursor.execute(
+            "INSERT INTO conteudo_teorico (area, pergunta, resposta) VALUES (?, ?, ?)",
+            (area, pergunta, resposta)
+        )#inserção de conteúdo o banco 
+        conexao.commit()
+        messagebox.showinfo("Sucesso", "Conteúdo salvo com sucesso.")
+        atualizar_lista_conhecimento()
+        entrada_area.delete(0, tk.END)
+        entrada_pergunta.delete(0, tk.END)
+        entrada_resposta.delete("1.0", tk.END)
+    except Exception as e:
+        messagebox.showerror("Erro", str(e))
+
+def atualizar_lista_conhecimento():
+    lista_conteudo.delete(0, tk.END)
+    cursor.execute("SELECT area, pergunta FROM conteudo_teorico ORDER BY id DESC")
+    for area, pergunta in cursor.fetchall():
+        lista_conteudo.insert(tk.END, f"[{area}] {pergunta}")#listagem de conteúdo
+        # Título
+tk.Label(aba_conhecimento, text="Cadastrar novo conhecimento", font=("Arial", 14), bg="#fafafa").pack(pady=10)
+
+# Área
+frame_area = tk.Frame(aba_conhecimento, bg="#fafafa")
+frame_area.pack(pady=5)
+tk.Label(frame_area, text="Área (ex: Química):", bg="#fafafa").grid(row=0, column=0, sticky="e")
+entrada_area = tk.Entry(frame_area, width=30)
+entrada_area.grid(row=0, column=1, padx=5)
+
+# Pergunta
+frame_pergunta = tk.Frame(aba_conhecimento, bg="#fafafa")
+frame_pergunta.pack(pady=5)
+tk.Label(frame_pergunta, text="Pergunta:", bg="#fafafa").grid(row=0, column=0, sticky="e")
+entrada_pergunta = tk.Entry(frame_pergunta, width=50)
+entrada_pergunta.grid(row=0, column=1, padx=5)
+
+# Resposta
+tk.Label(aba_conhecimento, text="Resposta:", bg="#fafafa").pack()
+entrada_resposta = tk.Text(aba_conhecimento, height=5, width=70)
+entrada_resposta.pack(pady=5)
+
+# Botão salvar
+tk.Button(aba_conhecimento, text="Salvar Conhecimento", command=salvar_conhecimento,
+          bg="#a5d6a7", fg="#1b5e20", font=("Arial", 12)).pack(pady=10)
+
+# Lista de conteúdos
+tk.Label(aba_conhecimento, text="Conhecimentos cadastrados:", bg="#fafafa").pack()
+lista_conteudo = tk.Listbox(aba_conhecimento, width=80, height=10)
+lista_conteudo.pack(pady=5)
+
+
+# Atualiza ao abrir
+atualizar_lista_conhecimento()
+#Visualizdor nao online
+def fechar_banco():
+    conexao.close()#fechar o banco
+    root.destroy()#quebra da interface do banco
+root.protocol("WM_DELETE_WINDOW", fechar_banco)
+root.mainloop()
